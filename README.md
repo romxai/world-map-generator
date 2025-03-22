@@ -1,36 +1,101 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Fantasy World Map Generator
+
+A Next.js application for generating high-resolution, detailed fantasy maps with procedural generation techniques. Create beautiful maps with customizable terrain, biomes, rivers, mountains, oceans, islands, and more.
+
+![Fantasy Map Generator](https://github.com/username/world-map-generator/raw/main/screenshot.png)
+
+## Features
+
+- **Procedurally Generated Maps**: Create unique fantasy maps with each generation
+- **Seed Control**: Reuse or share seeds to recreate the same map
+- **High Resolution**: Generate detailed maps at high resolutions (1024x768 default, can be customized)
+- **Interactive Controls**: Adjust parameters in real-time:
+  - Sea level
+  - Mountain height
+  - Terrain roughness
+  - River density
+  - Continent size
+  - Island frequency
+- **Biome Visualization**: Realistic biome placement based on elevation, moisture, and temperature
+- **Multiple View Modes**:
+  - Biome view
+  - Elevation view
+  - Moisture view
+  - Temperature view
+- **Interactive Features**:
+  - Zoom and pan
+  - Customize biome colors
+  - Hillshading for 3D effect
+- **Export**: Download maps as PNG images
+
+## Technologies Used
+
+- **Next.js**: React framework for the web application
+- **TypeScript**: For type-safe code
+- **Simplex Noise**: For natural-looking terrain generation
+- **React Colorful**: For color picking interface
+- **Tailwind CSS**: For styling
+- **Canvas API**: For map rendering
+
+## How It Works
+
+The map generation process follows these steps:
+
+1. **Base Terrain Generation**: Using multiple octaves of Simplex noise to create a heightmap
+2. **Moisture & Temperature Calculation**: Creating climate data based on elevation and position
+3. **River Formation**: Simulating water flow from high to low elevation
+4. **Biome Assignment**: Determining biomes based on elevation, moisture, and temperature
+5. **Rendering**: Visualizing the data using the HTML Canvas API
+
+## Inspiration
+
+This project was inspired by:
+
+- [mapgen4](https://github.com/redblobgames/mapgen4) by Red Blob Games
+- [Fantasy Map Generator](https://github.com/Azgaar/Fantasy-Map-Generator) by Azgaar
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- Node.js (v14.0.0 or higher)
+- npm or yarn
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Installation
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Clone the repository:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+   ```
+   git clone https://github.com/username/world-map-generator.git
+   cd world-map-generator
+   ```
 
-## Learn More
+2. Install dependencies:
 
-To learn more about Next.js, take a look at the following resources:
+   ```
+   npm install
+   # or
+   yarn install
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+3. Start the development server:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+   ```
+   npm run dev
+   # or
+   yarn dev
+   ```
 
-## Deploy on Vercel
+4. Open your browser and navigate to [http://localhost:3000](http://localhost:3000)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Usage
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Adjust the parameters in the control panel to customize your map
+2. Click the "Generate New Map" button to create a new map with the current settings
+3. Use the mouse wheel to zoom in/out and drag to pan around the map
+4. Toggle different view modes to see different aspects of your world
+5. Click the "Download Map" button to save your creation as a PNG image
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

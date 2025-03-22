@@ -2,26 +2,58 @@
 
 import React, { useRef, useState, useEffect } from "react";
 import { HexColorPicker } from "react-colorful";
-import {
-  generateMap,
-  MapConfig,
-  MapData,
-  BiomeType,
-  BiomeColors,
-} from "../utils/mapGenerator";
+import { generateMap, MapConfig, MapData, BiomeType } from "../utils/mapgen";
 import { renderMap, RenderOptions } from "../utils/mapRenderer";
 
+// Define biome colors for rendering
+const BiomeColors: Record<BiomeType, string> = {
+  [BiomeType.OCEAN_DEEP]: "#000080",
+  [BiomeType.OCEAN]: "#0077be",
+  [BiomeType.OCEAN_SHALLOW]: "#0099cc",
+  [BiomeType.BEACH]: "#dfcc74",
+  [BiomeType.SCORCHED]: "#555555",
+  [BiomeType.BARE]: "#888888",
+  [BiomeType.TUNDRA]: "#ddddbb",
+  [BiomeType.SNOW]: "#ffffff",
+  [BiomeType.TEMPERATE_DESERT]: "#e4e8ca",
+  [BiomeType.SUBTROPICAL_DESERT]: "#d2b98b",
+  [BiomeType.GRASSLAND]: "#b4c9a9",
+  [BiomeType.TEMPERATE_DECIDUOUS_FOREST]: "#a3c789",
+  [BiomeType.TEMPERATE_RAIN_FOREST]: "#86b26b",
+  [BiomeType.TROPICAL_SEASONAL_FOREST]: "#79c05a",
+  [BiomeType.TROPICAL_RAIN_FOREST]: "#338033",
+  [BiomeType.SHRUBLAND]: "#c4b29f",
+  [BiomeType.TAIGA]: "#ccd4bb",
+  [BiomeType.ALPINE]: "#aaaaaa",
+};
+
 const defaultMapConfig: MapConfig = {
-  seed: Math.random().toString(36).substring(2, 15),
-  width: 1024,
-  height: 768,
+  seed: Math.random().toString(36).substring(2, 10),
+  width: 800,
+  height: 600,
   seaLevel: 0.4,
-  mountainHeight: 0.7,
-  roughness: 0.5,
+  biomeDensity: 0.8,
+  mountainFrequency: 0.3,
+  hillFrequency: 0.6,
+  islandFrequency: 0.4,
+  pointDeviation: 0.45,
+  oceanRatio: 0.3,
+  jaggedness: 0.6,
+  mountainHeight: 0.8,
+  windAngleDeg: 45,
+  raininess: 0.5,
+  rainShadow: 0.7,
+  evaporation: 0.5,
+  riverWidth: 1.0,
   rivers: 0.5,
-  biomeDensity: 0.6,
-  continentSize: 2,
-  islandFrequency: 8,
+  riverMinFlow: 0.02,
+  showVoronoi: false,
+  lighting: {
+    enabled: true,
+    azimuth: 315,
+    angle: 45,
+    intensity: 0.5,
+  },
 };
 
 const defaultRenderOptions: RenderOptions = {
@@ -31,14 +63,18 @@ const defaultRenderOptions: RenderOptions = {
   showBiomes: true,
   showRivers: true,
   hillshading: true,
-  pixelated: false,
+  showVoronoi: false,
+  outlineStrength: 2.0,
+  lighting: 0.7,
+  ambientLight: 0.5,
+  lightAngle: 315,
 };
 
 export default function MapGenerator() {
+  console.log("MapGenerator component rendering");
+  
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [mapConfig, setMapConfig] = useState<MapConfig>({
-    ...defaultMapConfig,
-  });
+  const [mapConfig, setMapConfig] = useState<MapConfig>({ ...defaultMapConfig });
   const [renderOptions, setRenderOptions] = useState<RenderOptions>({
     ...defaultRenderOptions,
   });
@@ -55,13 +91,50 @@ export default function MapGenerator() {
     x: 0,
     y: 0,
   });
+  const [error, setError] = useState<string | null>(null);
 
   // Generate a new map whenever the configuration changes
   useEffect(() => {
-    if (!loading) {
-      generateNewMap();
+    console.log("Starting map generation with config:", mapConfig);
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Start generation in the next tick to allow UI to update
+      setTimeout(() => {
+        try {
+          console.time('mapGeneration');
+          const data = generateMap(mapConfig);
+          console.timeEnd('mapGeneration');
+          console.log("Map generation complete, data:", {
+            width: data.width,
+            height: data.height,
+            hasElevation: !!data.elevation && data.elevation.length > 0,
+            hasMoisture: !!data.moisture && data.moisture.length > 0,
+            hasBiomes: !!data.biomes && data.biomes.length > 0,
+            hasRivers: !!data.rivers && data.rivers.length > 0,
+          });
+          
+          setMapData(data);
+          setLoading(false);
+        } catch (err) {
+          console.error("Map generation error:", err);
+          setError(`Error generating map: ${err.message}`);
+          
+          // Create empty map data as fallback
+          console.log("Creating fallback empty map data");
+          setMapData(createEmptyMapData(mapConfig.width, mapConfig.height));
+          setLoading(false);
+        }
+      }, 0);
+    } catch (err) {
+      console.error("Error in map generation setup:", err);
+      setError(`Error setting up map generation: ${err.message}`);
+      setLoading(false);
     }
-  }, []);
+  }, [mapConfig.seed, mapConfig.seaLevel, mapConfig.mountainFrequency, 
+      mapConfig.biomeDensity, mapConfig.windAngleDeg, mapConfig.raininess, 
+      mapConfig.jaggedness, mapConfig.mountainHeight, mapConfig.rivers]);
 
   // Render the map whenever map data or render options change
   useEffect(() => {
@@ -80,22 +153,6 @@ export default function MapGenerator() {
       }
     }
   }, [mapData, renderOptions, zoom, pan]);
-
-  const generateNewMap = async () => {
-    setLoading(true);
-
-    // Use setTimeout to allow UI to update before heavy computation
-    setTimeout(() => {
-      try {
-        const newMapData = generateMap(mapConfig);
-        setMapData(newMapData);
-      } catch (error) {
-        console.error("Error generating map:", error);
-      } finally {
-        setLoading(false);
-      }
-    }, 10);
-  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type } = e.target;
@@ -209,264 +266,614 @@ export default function MapGenerator() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row w-full gap-4 p-4">
-      {/* Map Canvas */}
-      <div className="flex-grow relative border border-gray-300 dark:border-gray-700 rounded-lg overflow-hidden h-[70vh]">
-        <canvas
-          ref={canvasRef}
-          width={mapConfig.width}
-          height={mapConfig.height}
-          className="w-full h-full object-contain"
-          onMouseDown={handleCanvasMouseDown}
-          onMouseMove={handleCanvasMouseMove}
-          onMouseUp={handleCanvasMouseUp}
-          onMouseLeave={handleCanvasMouseUp}
-          onWheel={handleCanvasWheel}
-        />
-        {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-            <div className="text-white text-2xl font-bold">
-              Generating Map...
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Controls */}
-      <div className="flex flex-col space-y-4 w-full lg:w-80 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
-        <h2 className="text-xl font-bold">Map Settings</h2>
-
-        <div className="grid grid-cols-2 gap-2">
-          <label className="block">
-            <span className="text-sm">Seed:</span>
-            <input
-              type="text"
-              name="seed"
-              value={mapConfig.seed}
-              onChange={handleInputChange}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600"
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-sm">Sea Level:</span>
-            <input
-              type="range"
-              name="seaLevel"
-              min="0.1"
-              max="0.7"
-              step="0.01"
-              value={mapConfig.seaLevel}
-              onChange={handleInputChange}
-              className="mt-1 block w-full"
-            />
-            <span className="text-xs">{mapConfig.seaLevel.toFixed(2)}</span>
-          </label>
-
-          <label className="block">
-            <span className="text-sm">Mountains:</span>
-            <input
-              type="range"
-              name="mountainHeight"
-              min="0.1"
-              max="2"
-              step="0.1"
-              value={mapConfig.mountainHeight}
-              onChange={handleInputChange}
-              className="mt-1 block w-full"
-            />
-            <span className="text-xs">
-              {mapConfig.mountainHeight.toFixed(1)}
-            </span>
-          </label>
-
-          <label className="block">
-            <span className="text-sm">Roughness:</span>
-            <input
-              type="range"
-              name="roughness"
-              min="0.1"
-              max="0.9"
-              step="0.05"
-              value={mapConfig.roughness}
-              onChange={handleInputChange}
-              className="mt-1 block w-full"
-            />
-            <span className="text-xs">{mapConfig.roughness.toFixed(2)}</span>
-          </label>
-
-          <label className="block">
-            <span className="text-sm">Rivers:</span>
-            <input
-              type="range"
-              name="rivers"
-              min="0"
-              max="2"
-              step="0.1"
-              value={mapConfig.rivers}
-              onChange={handleInputChange}
-              className="mt-1 block w-full"
-            />
-            <span className="text-xs">{mapConfig.rivers.toFixed(1)}</span>
-          </label>
-
-          <label className="block">
-            <span className="text-sm">Continent Size:</span>
-            <input
-              type="range"
-              name="continentSize"
-              min="1"
-              max="5"
-              step="0.2"
-              value={mapConfig.continentSize}
-              onChange={handleInputChange}
-              className="mt-1 block w-full"
-            />
-            <span className="text-xs">
-              {mapConfig.continentSize.toFixed(1)}
-            </span>
-          </label>
-
-          <label className="block">
-            <span className="text-sm">Island Frequency:</span>
-            <input
-              type="range"
-              name="islandFrequency"
-              min="0"
-              max="20"
-              step="1"
-              value={mapConfig.islandFrequency}
-              onChange={handleInputChange}
-              className="mt-1 block w-full"
-            />
-            <span className="text-xs">
-              {mapConfig.islandFrequency.toFixed(0)}
-            </span>
-          </label>
-        </div>
+    <div className="container mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">Fantasy World Map Generator</h1>
+      
+      {error && (
+    <div className="flex flex-col md:flex-row w-full min-h-screen bg-gray-900 text-white">
+      <div className="flex flex-col w-full md:w-80 p-4 bg-gray-800 overflow-y-auto">
+        <h1 className="text-2xl font-bold mb-4">World Map Generator</h1>
 
         <button
           onClick={generateNewMap}
           disabled={loading}
-          className="py-2 px-4 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
+          className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded font-bold mb-4 disabled:opacity-50"
         >
           {loading ? "Generating..." : "Generate New Map"}
         </button>
 
-        <button
-          onClick={downloadMap}
-          disabled={!mapData || loading}
-          className="py-2 px-4 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50"
-        >
-          Download Map
-        </button>
-
-        <hr className="border-gray-300 dark:border-gray-700" />
-
-        <h3 className="text-lg font-semibold">Display Options</h3>
-
+        {/* Collapsible Configuration Sections */}
         <div className="space-y-2">
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              name="showBiomes"
-              checked={renderOptions.showBiomes}
-              onChange={handleCheckboxChange}
-              className="rounded text-indigo-600 focus:ring-indigo-500"
-            />
-            <span>Show Biomes</span>
-          </label>
+          {/* World Parameters */}
+          <details className="bg-gray-700 rounded p-2" open>
+            <summary className="font-bold cursor-pointer">
+              World Parameters
+            </summary>
+            <div className="space-y-2 mt-2">
+              <div>
+                <label className="block text-sm">Seed</label>
+                <div className="flex items-center">
+                  <input
+                    type="text"
+                    name="seed"
+                    value={mapConfig.seed}
+                    onChange={handleInputChange}
+                    className="w-full bg-gray-900 rounded px-2 py-1 text-sm"
+                  />
+                  <button
+                    onClick={() => {
+                      const newSeed = Math.random()
+                        .toString(36)
+                        .substring(2, 15);
+                      setMapConfig({
+                        ...mapConfig,
+                        seed: newSeed,
+                      });
+                    }}
+                    className="ml-2 bg-blue-600 hover:bg-blue-700 text-white text-xs px-2 py-1 rounded"
+                  >
+                    🎲
+                  </button>
+                </div>
+              </div>
 
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              name="showElevation"
-              checked={renderOptions.showElevation}
-              onChange={handleCheckboxChange}
-              className="rounded text-indigo-600 focus:ring-indigo-500"
-            />
-            <span>Show Elevation</span>
-          </label>
+              <div>
+                <label className="block text-sm">Width</label>
+                <input
+                  type="number"
+                  name="width"
+                  value={mapConfig.width}
+                  onChange={handleInputChange}
+                  min="256"
+                  max="4096"
+                  className="w-full bg-gray-900 rounded px-2 py-1 text-sm"
+                />
+              </div>
 
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              name="showMoisture"
-              checked={renderOptions.showMoisture}
-              onChange={handleCheckboxChange}
-              className="rounded text-indigo-600 focus:ring-indigo-500"
-            />
-            <span>Show Moisture</span>
-          </label>
+              <div>
+                <label className="block text-sm">Height</label>
+                <input
+                  type="number"
+                  name="height"
+                  value={mapConfig.height}
+                  onChange={handleInputChange}
+                  min="256"
+                  max="4096"
+                  className="w-full bg-gray-900 rounded px-2 py-1 text-sm"
+                />
+              </div>
+            </div>
+          </details>
 
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              name="showTemperature"
-              checked={renderOptions.showTemperature}
-              onChange={handleCheckboxChange}
-              className="rounded text-indigo-600 focus:ring-indigo-500"
-            />
-            <span>Show Temperature</span>
-          </label>
+          {/* Terrain Parameters */}
+          <details className="bg-gray-700 rounded p-2" open>
+            <summary className="font-bold cursor-pointer">
+              Terrain Parameters
+            </summary>
+            <div className="space-y-2 mt-2">
+              <div>
+                <label className="block text-sm">
+                  Sea Level: {mapConfig.seaLevel.toFixed(2)}
+                </label>
+                <input
+                  type="range"
+                  name="seaLevel"
+                  value={mapConfig.seaLevel}
+                  onChange={handleInputChange}
+                  min="0.1"
+                  max="0.7"
+                  step="0.01"
+                  className="w-full"
+                />
+              </div>
 
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              name="showRivers"
-              checked={renderOptions.showRivers}
-              onChange={handleCheckboxChange}
-              className="rounded text-indigo-600 focus:ring-indigo-500"
-            />
-            <span>Show Rivers</span>
-          </label>
+              <div>
+                <label className="block text-sm">
+                  Mountain Height: {mapConfig.mountainHeight.toFixed(2)}
+                </label>
+                <input
+                  type="range"
+                  name="mountainHeight"
+                  value={mapConfig.mountainHeight}
+                  onChange={handleInputChange}
+                  min="0.1"
+                  max="1"
+                  step="0.01"
+                  className="w-full"
+                />
+              </div>
 
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              name="hillshading"
-              checked={renderOptions.hillshading}
-              onChange={handleCheckboxChange}
-              className="rounded text-indigo-600 focus:ring-indigo-500"
-            />
-            <span>Hill Shading</span>
-          </label>
+              <div>
+                <label className="block text-sm">
+                  Roughness: {mapConfig.roughness.toFixed(2)}
+                </label>
+                <input
+                  type="range"
+                  name="roughness"
+                  value={mapConfig.roughness}
+                  onChange={handleInputChange}
+                  min="0.2"
+                  max="0.8"
+                  step="0.01"
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm">
+                  Continent Size: {mapConfig.continentSize.toFixed(1)}
+                </label>
+                <input
+                  type="range"
+                  name="continentSize"
+                  value={mapConfig.continentSize}
+                  onChange={handleInputChange}
+                  min="0.5"
+                  max="5"
+                  step="0.1"
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm">
+                  Island Frequency: {mapConfig.islandFactor.toFixed(1)}
+                </label>
+                <input
+                  type="range"
+                  name="islandFactor"
+                  value={mapConfig.islandFactor}
+                  onChange={handleInputChange}
+                  min="0"
+                  max="2"
+                  step="0.05"
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm">
+                  Mountain Jaggedness: {mapConfig.mountainJaggedness.toFixed(2)}
+                </label>
+                <input
+                  type="range"
+                  name="mountainJaggedness"
+                  value={mapConfig.mountainJaggedness}
+                  onChange={handleInputChange}
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  className="w-full"
+                />
+              </div>
+            </div>
+          </details>
+
+          {/* Climate Parameters */}
+          <details className="bg-gray-700 rounded p-2">
+            <summary className="font-bold cursor-pointer">
+              Climate Parameters
+            </summary>
+            <div className="space-y-2 mt-2">
+              <div>
+                <label className="block text-sm">
+                  Wind Angle: {mapConfig.windAngleDeg}°
+                </label>
+                <input
+                  type="range"
+                  name="windAngleDeg"
+                  value={mapConfig.windAngleDeg}
+                  onChange={handleInputChange}
+                  min="0"
+                  max="360"
+                  step="5"
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm">
+                  Raininess: {mapConfig.raininess.toFixed(2)}
+                </label>
+                <input
+                  type="range"
+                  name="raininess"
+                  value={mapConfig.raininess}
+                  onChange={handleInputChange}
+                  min="0.1"
+                  max="2"
+                  step="0.05"
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm">
+                  Rain Shadow: {mapConfig.rainShadow.toFixed(2)}
+                </label>
+                <input
+                  type="range"
+                  name="rainShadow"
+                  value={mapConfig.rainShadow}
+                  onChange={handleInputChange}
+                  min="0.1"
+                  max="1"
+                  step="0.05"
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm">
+                  Evaporation: {mapConfig.evaporation.toFixed(2)}
+                </label>
+                <input
+                  type="range"
+                  name="evaporation"
+                  value={mapConfig.evaporation}
+                  onChange={handleInputChange}
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  className="w-full"
+                />
+              </div>
+            </div>
+          </details>
+
+          {/* River Parameters */}
+          <details className="bg-gray-700 rounded p-2">
+            <summary className="font-bold cursor-pointer">
+              River Parameters
+            </summary>
+            <div className="space-y-2 mt-2">
+              <div>
+                <label className="block text-sm">
+                  River Amount: {mapConfig.rivers?.toFixed(2) || "0.00"}
+                </label>
+                <input
+                  type="range"
+                  name="rivers"
+                  value={mapConfig.rivers || 0.5}
+                  onChange={handleInputChange}
+                  min="0"
+                  max="2"
+                  step="0.05"
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm">
+                  River Min Flow: {mapConfig.riverMinFlow.toFixed(3)}
+                </label>
+                <input
+                  type="range"
+                  name="riverMinFlow"
+                  value={mapConfig.riverMinFlow}
+                  onChange={handleInputChange}
+                  min="0.001"
+                  max="0.1"
+                  step="0.001"
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm">
+                  River Width: {mapConfig.riverWidth.toFixed(2)}
+                </label>
+                <input
+                  type="range"
+                  name="riverWidth"
+                  value={mapConfig.riverWidth}
+                  onChange={handleInputChange}
+                  min="0.05"
+                  max="1"
+                  step="0.05"
+                  className="w-full"
+                />
+              </div>
+            </div>
+          </details>
+
+          {/* Density Parameters */}
+          <details className="bg-gray-700 rounded p-2">
+            <summary className="font-bold cursor-pointer">
+              Detail Parameters
+            </summary>
+            <div className="space-y-2 mt-2">
+              <div>
+                <label className="block text-sm">
+                  Biome Density: {mapConfig.biomeDensity.toFixed(2)}
+                </label>
+                <input
+                  type="range"
+                  name="biomeDensity"
+                  value={mapConfig.biomeDensity}
+                  onChange={handleInputChange}
+                  min="0.1"
+                  max="2"
+                  step="0.05"
+                  className="w-full"
+                />
+              </div>
+            </div>
+          </details>
+
+          {/* Rendering Options */}
+          <details className="bg-gray-700 rounded p-2" open>
+            <summary className="font-bold cursor-pointer">
+              Rendering Options
+            </summary>
+            <div className="space-y-2 mt-2">
+              <div className="flex flex-wrap gap-2">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="showElevation"
+                    checked={renderOptions.showElevation}
+                    onChange={handleCheckboxChange}
+                    className="mr-1"
+                  />
+                  <span className="text-sm">Elevation</span>
+                </label>
+
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="showMoisture"
+                    checked={renderOptions.showMoisture}
+                    onChange={handleCheckboxChange}
+                    className="mr-1"
+                  />
+                  <span className="text-sm">Moisture</span>
+                </label>
+
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="showTemperature"
+                    checked={renderOptions.showTemperature}
+                    onChange={handleCheckboxChange}
+                    className="mr-1"
+                  />
+                  <span className="text-sm">Temperature</span>
+                </label>
+
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="showBiomes"
+                    checked={renderOptions.showBiomes}
+                    onChange={handleCheckboxChange}
+                    className="mr-1"
+                  />
+                  <span className="text-sm">Biomes</span>
+                </label>
+
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="showRivers"
+                    checked={renderOptions.showRivers}
+                    onChange={handleCheckboxChange}
+                    className="mr-1"
+                  />
+                  <span className="text-sm">Rivers</span>
+                </label>
+
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="hillshading"
+                    checked={renderOptions.hillshading}
+                    onChange={handleCheckboxChange}
+                    className="mr-1"
+                  />
+                  <span className="text-sm">Hillshading</span>
+                </label>
+
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="showVoronoi"
+                    checked={renderOptions.showVoronoi}
+                    onChange={handleCheckboxChange}
+                    className="mr-1"
+                  />
+                  <span className="text-sm">Show Voronoi</span>
+                </label>
+              </div>
+
+              <div>
+                <label className="block text-sm">
+                  Light Angle: {renderOptions.lightAngle}°
+                </label>
+                <input
+                  type="range"
+                  name="lightAngle"
+                  value={renderOptions.lightAngle}
+                  onChange={(e) =>
+                    setRenderOptions({
+                      ...renderOptions,
+                      lightAngle: parseFloat(e.target.value),
+                    })
+                  }
+                  min="0"
+                  max="360"
+                  step="5"
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm">
+                  Lighting: {renderOptions.lighting.toFixed(2)}
+                </label>
+                <input
+                  type="range"
+                  name="lighting"
+                  value={renderOptions.lighting}
+                  onChange={(e) =>
+                    setRenderOptions({
+                      ...renderOptions,
+                      lighting: parseFloat(e.target.value),
+                    })
+                  }
+                  min="0"
+                  max="1.5"
+                  step="0.05"
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm">
+                  Ambient Light: {renderOptions.ambientLight.toFixed(2)}
+                </label>
+                <input
+                  type="range"
+                  name="ambientLight"
+                  value={renderOptions.ambientLight}
+                  onChange={(e) =>
+                    setRenderOptions({
+                      ...renderOptions,
+                      ambientLight: parseFloat(e.target.value),
+                    })
+                  }
+                  min="0.2"
+                  max="1"
+                  step="0.05"
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm">
+                  Outline Strength: {renderOptions.outlineStrength.toFixed(2)}
+                </label>
+                <input
+                  type="range"
+                  name="outlineStrength"
+                  value={renderOptions.outlineStrength}
+                  onChange={(e) =>
+                    setRenderOptions({
+                      ...renderOptions,
+                      outlineStrength: parseFloat(e.target.value),
+                    })
+                  }
+                  min="0.5"
+                  max="4"
+                  step="0.1"
+                  className="w-full"
+                />
+              </div>
+            </div>
+          </details>
+
+          {/* Biome Colors (Collapsible) */}
+          <details className="bg-gray-700 rounded p-2">
+            <summary className="font-bold cursor-pointer">Biome Colors</summary>
+            <div className="mt-2">
+              <div className="grid grid-cols-2 gap-1">
+                {Object.keys(BiomeColors).map((biome) => (
+                  <button
+                    key={biome}
+                    onClick={() => setSelectedBiome(biome as BiomeType)}
+                    className="flex items-center text-left py-1 px-2 rounded hover:bg-gray-600"
+                  >
+                    <div
+                      className="w-4 h-4 mr-2 rounded"
+                      style={{
+                        backgroundColor: biomeColors[biome as BiomeType],
+                      }}
+                    ></div>
+                    <span className="text-xs">{biome.replace(/_/g, " ")}</span>
+                  </button>
+                ))}
+              </div>
+
+              {selectedBiome && (
+                <div className="mt-2">
+                  <h4 className="text-sm font-bold">
+                    {selectedBiome.replace(/_/g, " ")}
+                  </h4>
+                  <div className="mt-1">
+                    <HexColorPicker
+                      color={biomeColors[selectedBiome]}
+                      onChange={handleBiomeColorChange}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </details>
+
+          {/* Map Controls */}
+          <details className="bg-gray-700 rounded p-2">
+            <summary className="font-bold cursor-pointer">Map Controls</summary>
+            <div className="space-y-2 mt-2">
+              <div>
+                <label className="block text-sm">
+                  Zoom: {zoom.toFixed(1)}x
+                </label>
+                <input
+                  type="range"
+                  value={zoom}
+                  onChange={(e) => setZoom(parseFloat(e.target.value))}
+                  min="0.2"
+                  max="4"
+                  step="0.1"
+                  className="w-full"
+                />
+              </div>
+
+              <div className="flex justify-center gap-2">
+                <button
+                  onClick={() => setPan({ x: 0, y: 0 })}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-2 py-1 rounded"
+                >
+                  Reset View
+                </button>
+
+                <button
+                  onClick={downloadMap}
+                  className="bg-green-600 hover:bg-green-700 text-white text-xs px-2 py-1 rounded"
+                >
+                  Download
+                </button>
+              </div>
+            </div>
+          </details>
         </div>
+      </div>
 
-        <hr className="border-gray-300 dark:border-gray-700" />
+      <div className="flex-1 bg-gray-900 p-4 flex justify-center items-center overflow-hidden">
+        <div className="relative">
+          <canvas
+            ref={canvasRef}
+            width={mapConfig.width}
+            height={mapConfig.height}
+            className="border border-gray-700 cursor-move"
+            style={{
+              maxWidth: "100%",
+              maxHeight: "calc(100vh - 2rem)",
+              objectFit: "contain",
+            }}
+            onMouseDown={handleCanvasMouseDown}
+            onMouseMove={handleCanvasMouseMove}
+            onMouseUp={handleCanvasMouseUp}
+            onMouseLeave={handleCanvasMouseUp}
+            onWheel={handleCanvasWheel}
+          ></canvas>
 
-        <h3 className="text-lg font-semibold">Biome Colors</h3>
-
-        <div className="grid grid-cols-2 gap-2 overflow-y-auto max-h-48">
-          {Object.entries(BiomeType).map(([key, value]) => (
-            <button
-              key={key}
-              onClick={() => setSelectedBiome(value)}
-              className={`flex items-center p-1 text-sm rounded ${
-                selectedBiome === value ? "ring-2 ring-indigo-500" : ""
-              }`}
-            >
-              <div
-                className="w-4 h-4 mr-1 rounded-sm"
-                style={{ backgroundColor: biomeColors[value] }}
-              />
-              <span>{key.replace(/_/g, " ")}</span>
-            </button>
-          ))}
+          {loading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+              <div className="text-white text-lg">Generating map...</div>
+            </div>
+          )}
         </div>
-
-        {selectedBiome && (
-          <div className="mt-2">
-            <h4 className="text-sm font-semibold mb-1">
-              {selectedBiome.replace(/_/g, " ")}
-            </h4>
-            <HexColorPicker
-              color={biomeColors[selectedBiome]}
-              onChange={handleBiomeColorChange}
-              className="w-full max-w-xs"
-            />
-          </div>
-        )}
       </div>
     </div>
   );
